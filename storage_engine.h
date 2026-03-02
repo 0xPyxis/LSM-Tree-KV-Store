@@ -2,6 +2,7 @@
 #include "memtable.h"
 #include <string>
 #include <optional>
+#include "wal.h"
 
 class StorageEngine
 {
@@ -15,4 +16,5 @@ public:
 
 private:
     Memtable memtable_;
+    WAL wal_;
 };
