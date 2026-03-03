@@ -3,6 +3,15 @@
 StorageEngine::StorageEngine()
     : wal_("wal.log")
 {
+    wal_.replay([this](const std::string &key,
+                       const std::string &value,
+                       bool is_delete)
+                {
+            if(is_delete) 
+                memtable_.remove(key);
+            else
+                memtable_.put(key, value); 
+        });
 }
 
 void StorageEngine::put(const std::string &key, const std::string &value)
