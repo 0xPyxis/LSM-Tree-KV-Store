@@ -9,6 +9,8 @@ public:
     WAL(const std::string &filename);
     ~WAL();
 
+    void open_for_append();
+    
     void append_put(const std::string &key, const std::string &value);
     void append_delete(const std::string &key);
 

@@ -5,16 +5,18 @@
 WAL::WAL(const std::string &filename)
     : filename_(filename)
 {
-    file_.open(filename_, std::ios::app);
-    if (!file_.is_open())
-    {
-        throw std::runtime_error("Failed to open WAL file");
-    }
 }
 
 WAL::~WAL()
 {
     close();
+}
+
+void WAL::open_for_append() {
+    file_.open(filename_, std::ios::app);
+    if(!file_.is_open()) {
+        throw std::runtime_error("Failed to open WAL file");
+    }
 }
 
 void WAL::append_put(const std::string &key, const std::string &value)

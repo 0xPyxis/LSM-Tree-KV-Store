@@ -3,6 +3,7 @@
 #include <string>
 #include <optional>
 #include "wal.h"
+#include <vector>
 
 class StorageEngine
 {
@@ -17,4 +18,11 @@ public:
 private:
     Memtable memtable_;
     WAL wal_;
+
+    std::vector<std::string> sstables_;
+    int next_sstable_id_ = 1;
+
+    const size_t MEMTABLE_LIMIT = 5;
+
+    void flush_memtable();
 };

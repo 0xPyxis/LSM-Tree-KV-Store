@@ -16,6 +16,8 @@ public:
     size_t size() const;
     void clear();
 
+    const std::map<std::string, std::string> &get_table() const;
+
 private:
     std::map<std::string, std::string> table_;
     static const std::string TOMBSTONE;

@@ -18,7 +18,7 @@ std::optional<std::string> Memtable::get(const std::string &key) const
 {
     auto it = table_.find(key);
 
-    if (it == table.end())
+    if (it == table_.end())
         return std::nullopt;
 
     if (it->second == TOMBSTONE)
@@ -35,4 +35,9 @@ size_t Memtable::size() const
 void Memtable::clear()
 {
     table_.clear();
+}
+
+const std::map<std::string, std::string> &Memtable::get_table() const
+{
+    return table_;
 }
