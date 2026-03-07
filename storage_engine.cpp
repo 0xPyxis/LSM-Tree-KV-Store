@@ -22,7 +22,8 @@ void StorageEngine::put(const std::string &key, const std::string &value)
     wal_.append_put(key, value);
     memtable_.put(key, value);
 
-    if (memtable_.size() >= MEMTABLE_LIMIT) {
+    if (memtable_.size() >= MEMTABLE_LIMIT)
+    {
         flush_memtable();
     }
 }
@@ -44,5 +45,17 @@ void StorageEngine::flush_memtable()
 
 std::optional<std::string> StorageEngine::get(const std::string &key) const
 {
-    return memtable_.get(key);
+    auto result = memtable_.get(key);
+
+    if (result)
+        return result;
+
+    for (auto it = sstables_.rbegin(); it != sstables_.rend(); ++it)
+    {
+        auto val = SSTable::get(*it, key);
+
+        if (val)
+            return val;
+    }
+    return std::nullopt;
 }

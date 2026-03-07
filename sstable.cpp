@@ -1,5 +1,6 @@
 #include "sstable.h"
 #include <fstream>
+#include <sstream>
 
 std::string SSTable::write(
     const std::map<std::string, std::string> &memtable,
@@ -17,4 +18,33 @@ std::string SSTable::write(
     file.close();
 
     return filename;
+}
+
+std::optional<std::string> SSTable::get(
+    const std::string &filename,
+    const std::string &key)
+{
+    std::ifstream file(filename);
+
+    std::string line;
+
+    while (std::getline(file, line))
+    {
+        std::istringstream iss(line);
+
+        std::string file_key;
+        std::string value;
+
+        if (std::getline(iss, file_key, '|') &&
+            std::getline(iss, value))
+        {
+            if (file_key == key)
+            {
+                if (value == "__TOMBSTONE__")
+                    return std::nullopt;
+                return value;
+            }
+        }
+    }
+    return std::nullopt;
 }
