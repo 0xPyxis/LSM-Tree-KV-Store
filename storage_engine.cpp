@@ -1,5 +1,6 @@
 #include "storage_engine.h"
 #include "sstable.h"
+#include "compaction.h"
 
 StorageEngine::StorageEngine()
     : wal_("wal.log")
@@ -23,15 +24,16 @@ void StorageEngine::put(const std::string &key, const std::string &value)
     memtable_.put(key, value);
 
     if (memtable_.size() >= MEMTABLE_LIMIT)
-    {
         flush_memtable();
-    }
 }
 
 void StorageEngine::remove(const std::string &key)
 {
     wal_.append_delete(key);
     memtable_.remove(key);
+
+    if (memtable_.size() >= MEMTABLE_LIMIT)
+        flush_memtable();
 }
 
 void StorageEngine::flush_memtable()
@@ -41,6 +43,21 @@ void StorageEngine::flush_memtable()
     sstables_.push_back(filename);
 
     memtable_.clear();
+
+    if (sstables_.size() > COMPACTION_THRESHOLD)
+        run_compaction();
+}
+
+void StorageEngine::run_compaction()
+{
+    std::string new_file = Compaction::run(sstables_, next_sstable_id_++);
+
+    for (const auto &f : sstables_)
+        std::remove(f.c_str());
+
+    sstables_.clear();
+
+    sstables_.push_back(new_file);
 }
 
 std::optional<std::string> StorageEngine::get(const std::string &key) const

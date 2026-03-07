@@ -22,7 +22,9 @@ private:
     std::vector<std::string> sstables_;
     int next_sstable_id_ = 1;
 
-    const size_t MEMTABLE_LIMIT = 5;
+    static constexpr size_t MEMTABLE_LIMIT = 5;
+    static constexpr size_t COMPACTION_THRESHOLD = 3;
 
     void flush_memtable();
+    void run_compaction();
 };
