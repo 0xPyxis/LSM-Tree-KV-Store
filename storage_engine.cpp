@@ -38,9 +38,17 @@ void StorageEngine::remove(const std::string &key)
 
 void StorageEngine::flush_memtable()
 {
-    std::string filename = SSTable::write(memtable_.get_table(), next_sstable_id_++);
+    BloomFilter filter;
+
+    for (const auto &[key, value] : memtable_.get_table())
+        filter.add(key);
+
+    std::string filename =
+        SSTable::write(memtable_.get_table(), next_sstable_id_++);
 
     sstables_.push_back(filename);
+
+    bloom_filters_[filename] = filter;
 
     memtable_.clear();
 
@@ -69,7 +77,17 @@ std::optional<std::string> StorageEngine::get(const std::string &key) const
 
     for (auto it = sstables_.rbegin(); it != sstables_.rend(); ++it)
     {
-        auto val = SSTable::get(*it, key);
+        const std::string &file = *it;
+
+        auto bf = bloom_filters_.find(file);
+
+        if (bf != bloom_filters_.end())
+        {
+            if (!bf->second.possibly_contains(key))
+                continue;
+        }
+
+        auto val = SSTable::get(file, key);
 
         if (val)
             return val;

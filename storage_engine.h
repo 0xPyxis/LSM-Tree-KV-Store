@@ -4,6 +4,8 @@
 #include <optional>
 #include "wal.h"
 #include <vector>
+#include "bloom_filter.h"
+#include <unordered_map>
 
 class StorageEngine
 {
@@ -21,6 +23,8 @@ private:
 
     std::vector<std::string> sstables_;
     int next_sstable_id_ = 1;
+
+    std::unordered_map<std::string, BloomFilter> bloom_filters_;
 
     static constexpr size_t MEMTABLE_LIMIT = 5;
     static constexpr size_t COMPACTION_THRESHOLD = 3;
