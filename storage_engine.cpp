@@ -43,8 +43,8 @@ void StorageEngine::flush_memtable()
     for (const auto &[key, value] : memtable_.get_table())
         filter.add(key);
 
-    std::string filename =
-        SSTable::write(memtable_.get_table(), next_sstable_id_++);
+    auto result = SSTable::write(memtable_.get_table(), next_sstable_id_++);
+    std::string filename = result.first;
 
     sstables_.push_back(filename);
 

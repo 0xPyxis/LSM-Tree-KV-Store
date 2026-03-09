@@ -1,23 +1,39 @@
 #include "sstable.h"
 #include <fstream>
 #include <sstream>
+#include <vector>
+#include <map>
+#include <optional>
 
-std::string SSTable::write(
-    const std::map<std::string, std::string> &memtable,
-    int file_id)
+std::pair<
+    std::string,
+    std::vector<std::pair<std::string, std::streampos>>>
+SSTable::write(const std::map<std::string, std::string> &memtable, int file_id)
 {
     std::string filename = "sstable_" + std::to_string(file_id) + ".dat";
 
     std::ofstream file(filename);
 
+    std::vector<std::pair<std::string, std::streampos>> index;
+
+    int counter = 0;
+    const int INDEX_STEP = 3;
+
     for (const auto &[key, value] : memtable)
     {
+        std::streampos pos = file.tellp();
+
         file << key << "|" << value << "\n";
+
+        if (counter % INDEX_STEP == 0)
+            index.push_back({key, pos});
+
+        counter++;
     }
 
     file.close();
 
-    return filename;
+    return {filename, index};
 }
 
 std::optional<std::string> SSTable::get(
