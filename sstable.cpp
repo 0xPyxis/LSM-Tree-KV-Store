@@ -1,15 +1,17 @@
 #include "sstable.h"
 #include <fstream>
-#include <sstream>
 #include <vector>
 #include <map>
 #include <optional>
 #include <cstdint>
+#include <algorithm>
 
 std::pair<
     std::string,
     std::vector<std::pair<std::string, std::streampos>>>
-SSTable::write(const std::map<std::string, std::string> &memtable, int file_id)
+SSTable::write(
+    const std::map<std::string, std::string> &memtable,
+    int file_id)
 {
     std::string filename = "sstable_" + std::to_string(file_id) + ".dat";
 
@@ -17,20 +19,10 @@ SSTable::write(const std::map<std::string, std::string> &memtable, int file_id)
     size_t current_block_size = 0;
     std::vector<std::pair<std::string, std::streampos>> block_index;
 
-    std::vector<std::pair<std::string, std::streampos>> index;
-
-    int counter = 0;
-    const int INDEX_STEP = 3;
-
     for (const auto &[key, value] : memtable)
     {
         if (current_block_size == 0)
             block_index.push_back({key, file.tellp()});
-
-        std::streampos pos = file.tellp();
-
-        if (counter % INDEX_STEP == 0)
-            index.push_back({key, pos});
 
         uint32_t key_size = key.size();
         uint32_t value_size = value.size();
@@ -50,8 +42,6 @@ SSTable::write(const std::map<std::string, std::string> &memtable, int file_id)
         {
             current_block_size = 0;
         }
-
-        counter++;
     }
 
     std::streampos index_start = file.tellp();
@@ -78,36 +68,7 @@ SSTable::write(const std::map<std::string, std::string> &memtable, int file_id)
 
     file.close();
 
-    return {filename, index};
-}
-
-std::optional<std::string> SSTable::get(
-    const std::string &filename,
-    const std::string &key)
-{
-    std::ifstream file(filename);
-
-    std::string line;
-
-    while (std::getline(file, line))
-    {
-        std::istringstream iss(line);
-
-        std::string file_key;
-        std::string value;
-
-        if (std::getline(iss, file_key, '|') &&
-            std::getline(iss, value))
-        {
-            if (file_key == key)
-            {
-                if (value == "__TOMBSTONE__")
-                    return std::nullopt;
-                return value;
-            }
-        }
-    }
-    return std::nullopt;
+    return {filename, block_index};
 }
 
 std::optional<std::string>
@@ -116,25 +77,55 @@ SSTable::get_with_index(
     const std::string &key,
     const std::vector<std::pair<std::string, std::streampos>> &index)
 {
+
     std::ifstream file(filename, std::ios::binary);
 
-    std::streampos start = 0;
+    file.seekg(-static_cast<int>(sizeof(std::streampos)), std::ios::end);
+    std::streampos index_start;
+    file.read(reinterpret_cast<char *>(&index_start), sizeof(index_start));
 
-    for (const auto &[k, pos] : index)
+    file.seekg(index_start);
+
+    uint32_t index_size;
+
+    file.read(reinterpret_cast<char *>(&index_size), sizeof(index_size));
+
+    std::vector<std::pair<std::string, uint64_t>> block_index;
+
+    for (uint32_t i = 0; i < index_size; i++)
+    {
+        uint16_t key_size;
+        file.read(reinterpret_cast<char *>(&key_size), sizeof(key_size));
+
+        std::string idx_key(key_size, '\0');
+
+        file.read(idx_key.data(), key_size);
+
+        uint64_t offset;
+
+        file.read(reinterpret_cast<char *>(&offset), sizeof(offset));
+
+        block_index.push_back({idx_key, offset});
+    }
+
+    uint64_t block_offset = 0;
+
+    for (const auto &[k, off] : block_index)
     {
         if (k <= key)
-            start = pos;
+            block_offset = off;
         else
             break;
     }
 
-    file.seekg(start);
+    file.seekg(block_offset);
 
     while (true)
     {
         uint32_t key_size;
         if (!file.read(reinterpret_cast<char *>(&key_size), sizeof(key_size)))
-            break;
+            ;
+        break;
 
         std::string file_key(key_size, '\0');
         file.read(file_key.data(), key_size);
@@ -147,7 +138,7 @@ SSTable::get_with_index(
 
         if (file_key == key)
         {
-            if (value == "__TOMBSTONE__")
+            if (value == "__TOMBSTONE")
                 return std::nullopt;
             return value;
         }
