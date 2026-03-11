@@ -46,9 +46,12 @@ void StorageEngine::flush_memtable()
     auto result = SSTable::write(memtable_.get_table(), next_sstable_id_++);
     std::string filename = result.first;
 
+    auto index = result.second;
     sstables_.push_back(filename);
 
     bloom_filters_[filename] = filter;
+
+    sparse_indexes_[filename] = index;
 
     memtable_.clear();
 
@@ -87,10 +90,15 @@ std::optional<std::string> StorageEngine::get(const std::string &key) const
                 continue;
         }
 
-        auto val = SSTable::get(file, key);
+        auto idx = sparse_indexes_.find(file);
 
-        if (val)
-            return val;
+        if (idx != sparse_indexes_.end())
+        {
+            auto val = SSTable::get_with_index(file, key, idx->second);
+
+            if (val)
+                return val;
+        }
     }
     return std::nullopt;
 }

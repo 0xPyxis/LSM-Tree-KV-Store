@@ -16,4 +16,12 @@ public:
     static std::optional<std::string> get(
         const std::string &filename,
         const std::string &key);
+
+    static std::optional<std::string>
+    get_with_index(
+        const std::string &filename,
+        const std::string &key,
+        const std::vector<std::pair<std::string, std::streampos>> &index);
+    
+    static constexpr size_t BLOCK_SIZE = 4096;
 };
