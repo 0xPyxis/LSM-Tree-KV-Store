@@ -7,6 +7,11 @@
 #include "bloom_filter.h"
 #include <unordered_map>
 #include <map>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <queue>
+#include <atomic>
 
 class StorageEngine
 {
@@ -17,6 +22,9 @@ public:
     void remove(const std::string &key);
 
     std::optional<std::string> get(const std::string &key) const;
+
+    ~StorageEngine();
+
 
 private:
     Memtable memtable_;
@@ -37,4 +45,15 @@ private:
         std::string,
         std::vector<std::pair<std::string, std::streampos>>>
         sparse_indexes_;
+
+    std::thread compaction_thread_;
+
+    std::mutex compaction_mutex_;
+    std::condition_variable compaction_cv_;
+
+    std::queue<bool> compaction_tasks_;
+
+    std::atomic<bool> stop_background_{false};
+
+    void compaction_worker();
 };

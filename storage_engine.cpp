@@ -16,6 +16,17 @@ StorageEngine::StorageEngine()
 
     wal_.open_for_append(); // open only after replay (since we are opening in append mode)
                             // the cursor will go to last.
+    compaction_thread_ = std::thread(&StorageEngine::compaction_worker, this);
+}
+
+StorageEngine::~StorageEngine()
+{
+    stop_background_ = true;
+
+    compaction_cv_.notify_all();
+
+    if (compaction_thread_.joinable())
+        compaction_thread_.join();
 }
 
 void StorageEngine::put(const std::string &key, const std::string &value)
@@ -56,7 +67,11 @@ void StorageEngine::flush_memtable()
     memtable_.clear();
 
     if (sstables_.size() > COMPACTION_THRESHOLD)
-        run_compaction();
+    {
+        std::lock_guard<std::mutex> lock(compaction_mutex_);
+        compaction_tasks_.push(true);
+        compaction_cv_.notify_one();
+    }
 }
 
 void StorageEngine::run_compaction()
@@ -101,4 +116,22 @@ std::optional<std::string> StorageEngine::get(const std::string &key) const
         }
     }
     return std::nullopt;
+}
+
+void StorageEngine::compaction_worker()
+{
+    while (!stop_background_)
+    {
+        std::unique_lock<std::mutex> lock(compaction_mutex_);
+        compaction_cv_.wait(lock, [&]
+                            { return !compaction_tasks_.empty() || stop_background_; });
+
+        if (stop_background_)
+            return;
+        compaction_tasks_.pop();
+
+        lock.unlock();
+
+        run_compaction();
+    }
 }
