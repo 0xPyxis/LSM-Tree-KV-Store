@@ -56,4 +56,7 @@ private:
     std::atomic<bool> stop_background_{false};
 
     void compaction_worker();
+
+    Memtable memtable_;
+    std::unique_ptr<Memtable> immutable_memtable_;
 };

@@ -35,7 +35,13 @@ void StorageEngine::put(const std::string &key, const std::string &value)
     memtable_.put(key, value);
 
     if (memtable_.size() >= MEMTABLE_LIMIT)
-        flush_memtable();
+    {
+        immutable_memtable_ = std::make_unique<Memtable>(std::move(memtable_));
+        memtable_ = Memtable();
+        std::lock_guard<std::mutex> lock(compaction_mutex_);
+        compaction_tasks_.push(true);
+        compaction_cv_.notify_one();
+    }
 }
 
 void StorageEngine::remove(const std::string &key)
@@ -44,34 +50,33 @@ void StorageEngine::remove(const std::string &key)
     memtable_.remove(key);
 
     if (memtable_.size() >= MEMTABLE_LIMIT)
-        flush_memtable();
+    {
+        immutable_memtable_ = std::make_unique<Memtable>(std::move(memtable_));
+        memtable_ = Memtable();
+        std::lock_guard<std::mutex> lock(compaction_mutex_);
+        compaction_tasks_.push(true);
+        compaction_cv_.notify_one();
+    }
 }
 
 void StorageEngine::flush_memtable()
 {
+    if (!immutable_memtable_)
+        return;
+
     BloomFilter filter;
 
-    for (const auto &[key, value] : memtable_.get_table())
+    for (const auto &[key, value] : immutable_memtable_->get_table())
         filter.add(key);
 
     auto result = SSTable::write(memtable_.get_table(), next_sstable_id_++);
     std::string filename = result.first;
 
-    auto index = result.second;
     sstables_.push_back(filename);
 
     bloom_filters_[filename] = filter;
 
-    sparse_indexes_[filename] = index;
-
-    memtable_.clear();
-
-    if (sstables_.size() > COMPACTION_THRESHOLD)
-    {
-        std::lock_guard<std::mutex> lock(compaction_mutex_);
-        compaction_tasks_.push(true);
-        compaction_cv_.notify_one();
-    }
+    immutable_memtable_.reset();
 }
 
 void StorageEngine::run_compaction()
@@ -132,6 +137,10 @@ void StorageEngine::compaction_worker()
 
         lock.unlock();
 
-        run_compaction();
+        if (immutable_memtable_)
+            flush_memtable();
+
+        if (sstables_.size() > COMPACTION_THRESHOLD)
+            run_compaction();
     }
 }
